@@ -63,6 +63,7 @@ public:
   bool used() const override { return used_; }
   void markUnused() override { used_ = false; }
   bool hidden() const override { return false; }
+  SystemTime creationTime() const override { return creation_time_; }
 
 private:
   const Histogram::Unit unit_;
@@ -72,6 +73,7 @@ private:
   std::atomic<bool> used_;
   const std::thread::id created_thread_id_;
   SymbolTable& symbol_table_;
+  const SystemTime creation_time_{std::chrono::system_clock::now()};
 };
 
 using TlsHistogramSharedPtr = RefcountPtr<ThreadLocalHistogramImpl>;
@@ -122,6 +124,7 @@ public:
   bool used() const override;
   void markUnused() override;
   bool hidden() const override;
+  SystemTime creationTime() const override { return creation_time_; }
 
   // RefcountInterface
   void incRefCount() override;
@@ -151,6 +154,7 @@ private:
   std::atomic<bool> shutting_down_{false};
   std::atomic<uint32_t> ref_count_{0};
   const uint64_t id_; // Index into TlsCache::histogram_cache_.
+  const SystemTime creation_time_{std::chrono::system_clock::now()};
 };
 
 using ParentHistogramImplSharedPtr = RefcountPtr<ParentHistogramImpl>;

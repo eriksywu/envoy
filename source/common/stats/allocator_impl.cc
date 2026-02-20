@@ -72,7 +72,7 @@ public:
   StatsSharedImpl(StatName name, AllocatorImpl& alloc, StatName tag_extracted_name,
                   const StatNameTagVector& stat_name_tags)
       : MetricImpl<BaseClass>(name, tag_extracted_name, stat_name_tags, alloc.symbolTable()),
-        alloc_(alloc) {}
+        alloc_(alloc), creation_time_(std::chrono::system_clock::now()) {}
 
   ~StatsSharedImpl() override {
     // MetricImpl must be explicitly cleared() before destruction, otherwise it
@@ -87,6 +87,7 @@ public:
   bool used() const override { return flags_ & Metric::Flags::Used; }
   void markUnused() override { flags_ &= ~Metric::Flags::Used; }
   bool hidden() const override { return flags_ & Metric::Flags::Hidden; }
+  SystemTime creationTime() const override { return creation_time_; }
 
   // RefcountInterface
   void incRefCount() override { ++ref_count_; }
@@ -122,6 +123,7 @@ public:
 
 protected:
   AllocatorImpl& alloc_;
+  const SystemTime creation_time_;
 
   // ref_count_ can be incremented as an atomic, without taking a new lock, as
   // the critical 0->1 transition occurs in makeCounter and makeGauge, which

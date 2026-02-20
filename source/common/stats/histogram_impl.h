@@ -1,8 +1,10 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
+#include "envoy/common/time.h"
 #include "envoy/config/metrics/v3/stats.pb.h"
 #include "envoy/stats/histogram.h"
 #include "envoy/stats/stats.h"
@@ -102,7 +104,7 @@ public:
   HistogramImpl(StatName name, Unit unit, Store& parent, StatName tag_extracted_name,
                 const StatNameTagVector& stat_name_tags)
       : HistogramImplHelper(name, tag_extracted_name, stat_name_tags, parent.symbolTable()),
-        unit_(unit), parent_(parent) {}
+        unit_(unit), parent_(parent), creation_time_(std::chrono::system_clock::now()) {}
   ~HistogramImpl() override {
     // We must explicitly free the StatName here in order to supply the
     // SymbolTable reference. An RAII alternative would be to store a
@@ -118,6 +120,7 @@ public:
   bool used() const override { return true; }
   void markUnused() override {}
   bool hidden() const override { return false; }
+  SystemTime creationTime() const override { return creation_time_; }
   SymbolTable& symbolTable() final { return parent_.symbolTable(); }
 
 private:
@@ -125,6 +128,7 @@ private:
 
   // This is used for delivering the histogram data to sinks.
   Store& parent_;
+  const SystemTime creation_time_;
 };
 
 /**
@@ -140,6 +144,7 @@ public:
   bool used() const override { return false; }
   void markUnused() override {}
   bool hidden() const override { return false; }
+  SystemTime creationTime() const override { return SystemTime(); }
   SymbolTable& symbolTable() override { return symbol_table_; }
 
   Unit unit() const override { return Unit::Null; };

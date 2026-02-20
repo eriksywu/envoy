@@ -2848,5 +2848,193 @@ TEST_F(RealHistogramNativePrometheusTest, NativeHistogramSchemaFallback) {
       << "Value 1000000000 should be in bucket 1 at schema -4";
 }
 
+// created_timestamp Tests
+
+TEST_F(PrometheusStatsFormatterTest, ProtobufCounterHasCreatedTimestamp) {
+  Stats::CustomStatNamespacesImpl custom_namespaces;
+
+  addCounter("cluster.test_1.upstream_cx_total", {{makeStat("cluster_name"), makeStat("test_1")}});
+  counters_[0]->add(10);
+
+  Http::TestResponseHeaderMapImpl response_headers;
+  Buffer::OwnedImpl response;
+  const uint64_t size = PrometheusStatsFormatter::statsAsPrometheusProtobuf(
+      counters_, gauges_, histograms_, textReadouts_, endpoints_helper_->cm_, response_headers,
+      response, StatsParams(), custom_namespaces);
+  EXPECT_EQ(1UL, size);
+
+  auto families = parsePrometheusProtobuf(response.toString());
+  ASSERT_EQ(1, families.size());
+
+  EXPECT_EQ(io::prometheus::client::MetricType::COUNTER, families[0].type());
+  ASSERT_EQ(1, families[0].metric_size());
+
+  const auto& metric = families[0].metric(0);
+  EXPECT_TRUE(metric.counter().has_created_timestamp());
+  EXPECT_GT(metric.counter().created_timestamp().seconds(), 0);
+  EXPECT_GE(metric.counter().created_timestamp().nanos(), 0);
+  EXPECT_LT(metric.counter().created_timestamp().nanos(), 1000000000);
+}
+
+TEST_F(PrometheusStatsFormatterTest, ProtobufGaugeHasNoCreatedTimestamp) {
+  Stats::CustomStatNamespacesImpl custom_namespaces;
+
+  addGauge("cluster.test_1.upstream_cx_active", {{makeStat("cluster_name"), makeStat("test_1")}});
+  gauges_[0]->set(5);
+
+  Http::TestResponseHeaderMapImpl response_headers;
+  Buffer::OwnedImpl response;
+  const uint64_t size = PrometheusStatsFormatter::statsAsPrometheusProtobuf(
+      counters_, gauges_, histograms_, textReadouts_, endpoints_helper_->cm_, response_headers,
+      response, StatsParams(), custom_namespaces);
+  EXPECT_EQ(1UL, size);
+
+  auto families = parsePrometheusProtobuf(response.toString());
+  ASSERT_EQ(1, families.size());
+
+  EXPECT_EQ(io::prometheus::client::MetricType::GAUGE, families[0].type());
+  ASSERT_EQ(1, families[0].metric_size());
+
+  const auto& metric = families[0].metric(0);
+  // Gauge proto message has no created_timestamp field per the Prometheus spec
+  // (CT only applies to cumulative types). Verify gauge is set and counter is not.
+  EXPECT_TRUE(metric.has_gauge());
+  EXPECT_FALSE(metric.has_counter());
+}
+
+TEST_F(PrometheusStatsFormatterTest, ProtobufClassicHistogramHasCreatedTimestamp) {
+  Stats::CustomStatNamespacesImpl custom_namespaces;
+
+  const std::vector<uint64_t> h1_values = {50, 20, 30, 70, 100};
+  HistogramWrapper h1_cumulative;
+  h1_cumulative.setHistogramValues(h1_values);
+  Stats::HistogramStatisticsImpl h1_cumulative_statistics(h1_cumulative.getHistogram());
+
+  auto histogram =
+      makeHistogram("cluster.test_1.upstream_rq_time", {{makeStat("cluster"), makeStat("test_1")}});
+  histogram->unit_ = Stats::Histogram::Unit::Milliseconds;
+  addHistogram(histogram);
+  EXPECT_CALL(*histogram, cumulativeStatistics()).WillOnce(ReturnRef(h1_cumulative_statistics));
+
+  Http::TestResponseHeaderMapImpl response_headers;
+  Buffer::OwnedImpl response;
+  const uint64_t size = PrometheusStatsFormatter::statsAsPrometheusProtobuf(
+      counters_, gauges_, histograms_, textReadouts_, endpoints_helper_->cm_, response_headers,
+      response, StatsParams(), custom_namespaces);
+  EXPECT_EQ(1UL, size);
+
+  auto families = parsePrometheusProtobuf(response.toString());
+  ASSERT_EQ(1, families.size());
+
+  EXPECT_EQ(io::prometheus::client::MetricType::HISTOGRAM, families[0].type());
+  ASSERT_EQ(1, families[0].metric_size());
+
+  const auto& metric = families[0].metric(0);
+  EXPECT_TRUE(metric.histogram().has_created_timestamp());
+  EXPECT_GT(metric.histogram().created_timestamp().seconds(), 0);
+  EXPECT_GE(metric.histogram().created_timestamp().nanos(), 0);
+  EXPECT_LT(metric.histogram().created_timestamp().nanos(), 1000000000);
+}
+
+TEST_F(PrometheusStatsFormatterTest, ProtobufSummaryHasCreatedTimestamp) {
+  Stats::CustomStatNamespacesImpl custom_namespaces;
+
+  const std::vector<uint64_t> h1_values = {50, 20, 30, 70, 100};
+  HistogramWrapper h1_interval;
+  h1_interval.setHistogramValues(h1_values);
+  Stats::HistogramStatisticsImpl h1_interval_statistics(h1_interval.getHistogram());
+
+  auto histogram =
+      makeHistogram("cluster.test_1.upstream_rq_time", {{makeStat("cluster"), makeStat("test_1")}});
+  addHistogram(histogram);
+  EXPECT_CALL(*histogram, intervalStatistics()).WillOnce(ReturnRef(h1_interval_statistics));
+
+  StatsParams params;
+  params.histogram_buckets_mode_ = Utility::HistogramBucketsMode::Summary;
+
+  Http::TestResponseHeaderMapImpl response_headers;
+  Buffer::OwnedImpl response;
+  const uint64_t size = PrometheusStatsFormatter::statsAsPrometheusProtobuf(
+      counters_, gauges_, histograms_, textReadouts_, endpoints_helper_->cm_, response_headers,
+      response, params, custom_namespaces);
+  EXPECT_EQ(1UL, size);
+
+  auto families = parsePrometheusProtobuf(response.toString());
+  ASSERT_EQ(1, families.size());
+
+  EXPECT_EQ(io::prometheus::client::MetricType::SUMMARY, families[0].type());
+  ASSERT_EQ(1, families[0].metric_size());
+
+  const auto& metric = families[0].metric(0);
+  EXPECT_TRUE(metric.summary().has_created_timestamp());
+  EXPECT_GT(metric.summary().created_timestamp().seconds(), 0);
+  EXPECT_GE(metric.summary().created_timestamp().nanos(), 0);
+  EXPECT_LT(metric.summary().created_timestamp().nanos(), 1000000000);
+}
+
+TEST_F(PrometheusStatsFormatterTest, ProtobufNativeHistogramHasCreatedTimestamp) {
+  Stats::CustomStatNamespacesImpl custom_namespaces;
+
+  const std::vector<uint64_t> h1_values = {0, 0, 0, 50, 20, 30, 70, 100, 200};
+  HistogramWrapper h1_cumulative;
+  h1_cumulative.setHistogramValues(h1_values);
+  Stats::HistogramStatisticsImpl h1_cumulative_statistics(h1_cumulative.getHistogram());
+
+  auto histogram =
+      makeHistogram("cluster.test_1.upstream_rq_time", {{makeStat("cluster"), makeStat("test_1")}});
+  histogram->unit_ = Stats::Histogram::Unit::Milliseconds;
+  addHistogram(histogram);
+
+  std::vector<Stats::ParentHistogram::Bucket> detailed_buckets = {
+      {0.0, 0.1, 3},
+      {10.0, 10.0, 2},
+      {50.0, 25.0, 3},
+      {100.0, 50.0, 1},
+  };
+
+  EXPECT_CALL(*histogram, cumulativeStatistics()).WillOnce(ReturnRef(h1_cumulative_statistics));
+  EXPECT_CALL(*histogram, detailedTotalBuckets()).WillOnce(testing::Return(detailed_buckets));
+
+  EXPECT_CALL(*histogram, cumulativeCountLessThanOrEqualToValue(testing::_))
+      .WillRepeatedly([](double value) -> uint64_t {
+        if (value < 0.0) {
+          return 0;
+        }
+        if (value < 10.0) {
+          return 3;
+        }
+        if (value < 50.0) {
+          return 5;
+        }
+        if (value < 100.0) {
+          return 8;
+        }
+        return 9;
+      });
+
+  StatsParams params;
+  params.histogram_buckets_mode_ = Utility::HistogramBucketsMode::PrometheusNative;
+  params.native_histogram_max_buckets_ = 20;
+
+  Http::TestResponseHeaderMapImpl response_headers;
+  Buffer::OwnedImpl response;
+  const uint64_t size = PrometheusStatsFormatter::statsAsPrometheusProtobuf(
+      counters_, gauges_, histograms_, textReadouts_, endpoints_helper_->cm_, response_headers,
+      response, params, custom_namespaces);
+  EXPECT_EQ(1UL, size);
+
+  auto families = parsePrometheusProtobuf(response.toString());
+  ASSERT_EQ(1, families.size());
+
+  EXPECT_EQ(io::prometheus::client::MetricType::HISTOGRAM, families[0].type());
+  ASSERT_EQ(1, families[0].metric_size());
+
+  const auto& metric = families[0].metric(0);
+  EXPECT_TRUE(metric.histogram().has_created_timestamp());
+  EXPECT_GT(metric.histogram().created_timestamp().seconds(), 0);
+  EXPECT_GE(metric.histogram().created_timestamp().nanos(), 0);
+  EXPECT_LT(metric.histogram().created_timestamp().nanos(), 1000000000);
+}
+
 } // namespace Server
 } // namespace Envoy

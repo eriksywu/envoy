@@ -1,11 +1,13 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "envoy/common/pure.h"
+#include "envoy/common/time.h"
 #include "envoy/stats/refcount_ptr.h"
 #include "envoy/stats/tag.h"
 
@@ -102,6 +104,13 @@ public:
    * Indicates whether this metric is hidden.
    */
   virtual bool hidden() const PURE;
+
+  /**
+   * Returns the wall-clock time when this metric was first created.
+   * This is intended for populating the created_timestamp field in
+   * Prometheus protobuf exposition format.
+   */
+  virtual SystemTime creationTime() const PURE;
 
   /**
    * Flags:

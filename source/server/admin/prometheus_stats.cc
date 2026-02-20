@@ -317,6 +317,23 @@ public:
   }
 
 private:
+  // Helper to set a created_timestamp proto field from a SystemTime.
+  // Skips epoch (zero) values, which null stat implementations return.
+  static void maybeSetCreatedTimestamp(google::protobuf::Timestamp* timestamp,
+                                       SystemTime creation_time) {
+    if (creation_time == SystemTime()) {
+      return;
+    }
+    const auto duration = creation_time.time_since_epoch();
+    const auto seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+    const auto nanos =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count() %
+        1000000000;
+    timestamp->set_seconds(seconds);
+    timestamp->set_nanos(static_cast<int32_t>(nanos));
+  }
+
   // Helper method to add labels to a metric from tags.
   void addLabelsToMetric(io::prometheus::client::Metric* metric,
                          const std::vector<Stats::Tag>& tags) const {
@@ -347,6 +364,10 @@ private:
       if (type == io::prometheus::client::MetricType::COUNTER) {
         auto* counter = prom_metric->mutable_counter();
         counter->set_value(metric->value());
+        if constexpr (std::is_base_of_v<Stats::Metric, StatType>) {
+          maybeSetCreatedTimestamp(counter->mutable_created_timestamp(),
+                                  metric->creationTime());
+        }
       } else {
         auto* gauge = prom_metric->mutable_gauge();
         gauge->set_value(metric->value());
@@ -379,6 +400,9 @@ private:
         bucket->set_upper_bound(supported_buckets[i]);
         bucket->set_cumulative_count(computed_buckets[i]);
       }
+
+      maybeSetCreatedTimestamp(prom_histogram->mutable_created_timestamp(),
+                              histogram->creationTime());
     }
   }
 
@@ -405,6 +429,9 @@ private:
         quantile->set_quantile(supported_quantiles[i]);
         quantile->set_value(computed_quantiles[i]);
       }
+
+      maybeSetCreatedTimestamp(summary->mutable_created_timestamp(),
+                              histogram->creationTime());
     }
   }
 
@@ -451,6 +478,8 @@ private:
       addLabelsToMetric(metric, histogram->tags());
 
       auto* proto_histogram = metric->mutable_histogram();
+      maybeSetCreatedTimestamp(proto_histogram->mutable_created_timestamp(),
+                              histogram->creationTime());
 
       // Handle empty histogram case early to avoid unnecessary work.
       // Add a no-op span (offset 0, length 0) to distinguish from classic histograms.

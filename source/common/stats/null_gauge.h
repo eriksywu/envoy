@@ -1,5 +1,6 @@
 #pragma once
 
+#include "envoy/common/time.h"
 #include "envoy/stats/stats.h"
 
 #include "source/common/stats/metric_impl.h"
@@ -37,6 +38,7 @@ public:
   bool used() const override { return false; }
   void markUnused() override {}
   bool hidden() const override { return false; }
+  SystemTime creationTime() const override { return SystemTime(); }
   SymbolTable& symbolTable() override { return symbol_table_; }
 
   // RefcountInterface

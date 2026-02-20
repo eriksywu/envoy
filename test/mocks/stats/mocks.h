@@ -60,6 +60,7 @@ public:
 
   SymbolTable& symbolTable() override { return *symbol_table_; }
   const SymbolTable& constSymbolTable() const override { return *symbol_table_; }
+  SystemTime creationTime() const override { return creation_time_; }
 
   // Note: cannot be mocked because it is accessed as a Property in a gmock EXPECT_CALL. This
   // creates a deadlock in gmock and is an unintended use of mock functions.
@@ -86,6 +87,7 @@ public:
 
   TestUtil::TestSymbolTable symbol_table_; // Must outlive name_.
   MetricName name_;
+  SystemTime creation_time_{std::chrono::system_clock::now()};
 
   void setTags(const TagVector& tags) {
     tag_pool_.clear();

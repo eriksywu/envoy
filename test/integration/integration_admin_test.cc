@@ -494,6 +494,28 @@ TEST_P(IntegrationAdminTest, AdminPrometheusProtobufFormat) {
   auto families = parsePrometheusProtobuf(response->body());
   EXPECT_GT(families.size(), 0);
 
+  // Validate that counters have created_timestamp set and gauges do not.
+  bool found_counter = false;
+  bool found_gauge = false;
+  for (const auto& family : families) {
+    if (family.type() == io::prometheus::client::MetricType::COUNTER) {
+      found_counter = true;
+      for (const auto& metric : family.metric()) {
+        EXPECT_TRUE(metric.counter().has_created_timestamp()) << "Counter " << family.name();
+        EXPECT_GT(metric.counter().created_timestamp().seconds(), 0) << "Counter " << family.name();
+      }
+    } else if (family.type() == io::prometheus::client::MetricType::GAUGE) {
+      found_gauge = true;
+      for (const auto& metric : family.metric()) {
+        // Gauge proto has no created_timestamp field (CT only applies to cumulative types).
+        EXPECT_TRUE(metric.has_gauge()) << "Gauge " << family.name();
+        EXPECT_FALSE(metric.has_counter()) << "Gauge " << family.name();
+      }
+    }
+  }
+  EXPECT_TRUE(found_counter) << "Expected at least one counter in prometheus protobuf output";
+  EXPECT_TRUE(found_gauge) << "Expected at least one gauge in prometheus protobuf output";
+
   codec_client_->close();
 }
 
