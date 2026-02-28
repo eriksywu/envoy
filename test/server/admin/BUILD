@@ -202,6 +202,7 @@ envoy_cc_test(
     srcs = envoy_select_admin_functionality(["prometheus_stats_test.cc"]),
     rbe_pool = "6gig",
     deps = [
+        "//source/common/stats:resource_timestamp_registry_lib",
         "//source/common/stats:tag_producer_lib",
         "//source/common/stats:thread_local_store_lib",
         "//source/server/admin:prometheus_stats_lib",

@@ -1,5 +1,7 @@
 #include "source/common/upstream/cds_api_helper.h"
 
+#include <chrono>
+
 #include "envoy/common/exception.h"
 #include "envoy/config/cluster/v3/cluster.pb.h"
 #include "envoy/config/endpoint/v3/endpoint.pb.h"
@@ -8,6 +10,7 @@
 #include "source/common/common/fmt.h"
 #include "source/common/config/resource_name.h"
 #include "source/common/runtime/runtime_features.h"
+#include "source/common/stats/resource_timestamp_registry.h"
 
 #include "absl/container/flat_hash_set.h"
 
@@ -58,6 +61,13 @@ CdsApiHelper::onConfigUpdate(const std::vector<Config::DecodedResourceRef>& adde
       if (*update_or_error) {
         any_applied = true;
         ENVOY_LOG(debug, "{}: add/update cluster '{}'", name_, cluster_name);
+        if (timestamp_registry_ != nullptr) {
+          timestamp_registry_->recordFirstSeen(
+              cluster_name,
+              std::chrono::duration_cast<std::chrono::seconds>(
+                  std::chrono::system_clock::now().time_since_epoch())
+                  .count());
+        }
         ++added_or_updated;
       } else {
         ENVOY_LOG(debug, "{}: add/update cluster '{}' skipped", name_, cluster_name);
@@ -74,6 +84,9 @@ CdsApiHelper::onConfigUpdate(const std::vector<Config::DecodedResourceRef>& adde
     if (cm_.removeCluster(resource_name)) {
       any_applied = true;
       ENVOY_LOG(debug, "{}: remove cluster '{}'", name_, resource_name);
+      if (timestamp_registry_ != nullptr) {
+        timestamp_registry_->remove(resource_name);
+      }
       ++removed;
     }
   }

@@ -26,6 +26,17 @@ envoy_cc_library(
 )
 
 envoy_cc_library(
+    name = "resource_timestamp_registry_lib",
+    srcs = ["resource_timestamp_registry.cc"],
+    hdrs = ["resource_timestamp_registry.h"],
+    deps = [
+        "//source/common/common:thread_lib",
+        "@abseil-cpp//absl/container:flat_hash_map",
+        "@abseil-cpp//absl/strings",
+    ],
+)
+
+envoy_cc_library(
     name = "stat_match_input_lib",
     srcs = ["stat_match_input.cc"],
     hdrs = ["stat_match_input.h"],

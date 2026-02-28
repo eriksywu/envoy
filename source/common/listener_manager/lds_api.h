@@ -17,6 +17,11 @@
 #include "source/common/init/target_impl.h"
 
 namespace Envoy {
+
+namespace Stats {
+class ResourceTimestampRegistry;
+}
+
 namespace Server {
 
 /**
@@ -30,7 +35,8 @@ public:
              const xds::core::v3::ResourceLocator* lds_resources_locator,
              Config::XdsManager& xds_manager, Upstream::ClusterManager& cm,
              Init::Manager& init_manager, Stats::Scope& scope, ListenerManager& lm,
-             ProtobufMessage::ValidationVisitor& validation_visitor);
+             ProtobufMessage::ValidationVisitor& validation_visitor,
+             Stats::ResourceTimestampRegistry* timestamp_registry = nullptr);
 
   // Server::LdsApi
   std::string versionInfo() const override { return system_version_info_; }
@@ -50,6 +56,7 @@ private:
   ListenerManager& listener_manager_;
   Stats::ScopeSharedPtr scope_;
   Config::XdsManager& xds_manager_;
+  Stats::ResourceTimestampRegistry* timestamp_registry_;
   Init::TargetImpl init_target_;
 };
 

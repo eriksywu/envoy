@@ -201,7 +201,6 @@ public:
   bool used() const override { return counter_->used(); }
   void markUnused() override { counter_->markUnused(); }
   bool hidden() const override { return counter_->hidden(); }
-  SystemTime creationTime() const override { return counter_->creationTime(); }
   SymbolTable& symbolTable() override { return counter_->symbolTable(); }
   const SymbolTable& constSymbolTable() const override { return counter_->constSymbolTable(); }
 

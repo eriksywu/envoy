@@ -6,6 +6,7 @@
 #include "source/common/http/context_impl.h"
 #include "source/common/quic/quic_stat_names.h"
 #include "source/common/router/context_impl.h"
+#include "source/common/stats/resource_timestamp_registry.h"
 #include "source/common/stats/symbol_table.h"
 #include "source/common/tls/context_manager_impl.h"
 
@@ -79,6 +80,7 @@ public:
   MOCK_METHOD(Api::Api&, api, ());
   MOCK_METHOD(Secret::SecretManager&, secretManager, ());
   MOCK_METHOD(Ssl::ContextManager&, sslContextManager, ());
+  MOCK_METHOD(Stats::ResourceTimestampRegistry&, resourceTimestampRegistry, ());
   Http::Context& httpContext() override { return http_context_; }
   Grpc::Context& grpcContext() override { return grpc_context_; }
   Router::Context& routerContext() override { return router_context_; }
@@ -195,6 +197,7 @@ public:
   MOCK_METHOD(bool, healthCheckFailed, (), (const));
   MOCK_METHOD(Secret::SecretManager&, secretManager, ());
   MOCK_METHOD(Ssl::ContextManager&, sslContextManager, ());
+  MOCK_METHOD(Stats::ResourceTimestampRegistry&, resourceTimestampRegistry, ());
 };
 
 } // namespace Configuration

@@ -187,6 +187,7 @@ envoy_cc_mock(
         ":server_factory_context_mocks",
         "//envoy/server:instance_interface",
         "//source/common/secret:secret_manager_impl_lib",
+        "//source/common/stats:resource_timestamp_registry_lib",
         "//test/mocks/config:xds_manager_mocks",
     ],
 )
@@ -220,6 +221,7 @@ envoy_cc_mock(
         "//source/common/router:context_lib",
         "//source/common/secret:secret_manager_impl_lib",
         "//source/common/singleton:manager_impl_lib",
+        "//source/common/stats:resource_timestamp_registry_lib",
         "//source/common/stats:stats_lib",
         "//source/common/tls:context_lib",
         "//test/mocks/access_log:access_log_mocks",

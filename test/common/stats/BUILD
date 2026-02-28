@@ -24,6 +24,15 @@ envoy_cc_test(
 )
 
 envoy_cc_test(
+    name = "resource_timestamp_registry_test",
+    srcs = ["resource_timestamp_registry_test.cc"],
+    rbe_pool = "6gig",
+    deps = [
+        "//source/common/stats:resource_timestamp_registry_lib",
+    ],
+)
+
+envoy_cc_test(
     name = "custom_stat_namespaces_impl_test",
     srcs = ["custom_stat_namespaces_impl_test.cc"],
     rbe_pool = "6gig",

@@ -30,7 +30,9 @@ CdsApiImpl::CdsApiImpl(const envoy::config::core::v3::ConfigSource& cds_config,
                        bool support_multi_ads_sources, absl::Status& creation_status)
     : Envoy::Config::SubscriptionBase<envoy::config::cluster::v3::Cluster>(validation_visitor,
                                                                            "name"),
-      helper_(cm, factory_context.xdsManager(), "cds"), cm_(cm),
+      helper_(cm, factory_context.xdsManager(), "cds",
+              &factory_context.resourceTimestampRegistry()),
+      cm_(cm),
       scope_(scope.createScope("cluster_manager.cds.")), factory_context_(factory_context),
       stats_({ALL_CDS_STATS(POOL_COUNTER(*scope_), POOL_GAUGE(*scope_))}),
       support_multi_ads_sources_(support_multi_ads_sources) {

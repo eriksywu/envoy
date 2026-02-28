@@ -2,6 +2,8 @@
 
 #include "envoy/server/instance.h"
 
+#include "source/common/stats/resource_timestamp_registry.h"
+
 #include "test/mocks/config/xds_manager.h"
 #include "test/mocks/http/http_server_properties_cache.h"
 #include "test/mocks/server/server_factory_context.h"
@@ -49,6 +51,7 @@ public:
   MOCK_METHOD(Singleton::Manager&, singletonManager, ());
   MOCK_METHOD(time_t, startTimeCurrentEpoch, ());
   MOCK_METHOD(time_t, startTimeFirstEpoch, ());
+  MOCK_METHOD(Stats::ResourceTimestampRegistry&, resourceTimestampRegistry, ());
   MOCK_METHOD(Stats::Store&, stats, ());
   MOCK_METHOD(Grpc::Context&, grpcContext, ());
   MOCK_METHOD(Http::Context&, httpContext, ());

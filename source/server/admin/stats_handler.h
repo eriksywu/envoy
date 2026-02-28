@@ -16,6 +16,11 @@
 #include "absl/strings/string_view.h"
 
 namespace Envoy {
+
+namespace Stats {
+class ResourceTimestampRegistry;
+}
+
 namespace Server {
 
 class StatsHandler : public HandlerContextBase {
@@ -73,7 +78,8 @@ public:
   prometheusRender(Stats::Store& stats, const Stats::CustomStatNamespaces& custom_namespaces,
                    const Upstream::ClusterManager& cluster_manager, const StatsParams& params,
                    const Http::RequestHeaderMap& request_headers,
-                   Http::ResponseHeaderMap& response_headers, Buffer::Instance& response);
+                   Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
+                   const Stats::ResourceTimestampRegistry* timestamp_registry = nullptr);
 
   Http::Code handlerContention(Http::ResponseHeaderMap& response_headers,
                                Buffer::Instance& response, AdminStream&);

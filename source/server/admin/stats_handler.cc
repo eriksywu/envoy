@@ -174,7 +174,8 @@ Http::Code StatsHandler::prometheusFlushAndRender(const StatsParams& params,
     server_.flushStats();
   }
   prometheusRender(server_.stats(), server_.api().customStatNamespaces(), server_.clusterManager(),
-                   params, request_headers, response_headers, response);
+                   params, request_headers, response_headers, response,
+                   &server_.resourceTimestampRegistry());
   return Http::Code::OK;
 }
 
@@ -184,13 +185,14 @@ void StatsHandler::prometheusRender(Stats::Store& stats,
                                     const StatsParams& params,
                                     const Http::RequestHeaderMap& request_headers,
                                     Http::ResponseHeaderMap& response_headers,
-                                    Buffer::Instance& response) {
+                                    Buffer::Instance& response,
+                                    const Stats::ResourceTimestampRegistry* timestamp_registry) {
   const std::vector<Stats::TextReadoutSharedPtr>& text_readouts_vec =
       params.prometheus_text_readouts_ ? stats.textReadouts()
                                        : std::vector<Stats::TextReadoutSharedPtr>();
   PrometheusStatsFormatter::statsAsPrometheus(
       stats.counters(), stats.gauges(), stats.histograms(), text_readouts_vec, cluster_manager,
-      request_headers, response_headers, response, params, custom_namespaces);
+      request_headers, response_headers, response, params, custom_namespaces, timestamp_registry);
 }
 
 Http::Code StatsHandler::handlerContention(Http::ResponseHeaderMap& response_headers,

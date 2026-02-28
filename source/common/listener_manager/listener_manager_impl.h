@@ -88,7 +88,8 @@ public:
     return std::make_unique<LdsApiImpl>(
         lds_config, lds_resources_locator, server_.xdsManager(), server_.clusterManager(),
         server_.initManager(), *server_.stats().rootScope(), server_.listenerManager(),
-        server_.messageValidationContext().dynamicValidationVisitor());
+        server_.messageValidationContext().dynamicValidationVisitor(),
+        &server_.resourceTimestampRegistry());
   }
   absl::StatusOr<Filter::NetworkFilterFactoriesList> createNetworkFilterFactoryList(
       const Protobuf::RepeatedPtrField<envoy::config::listener::v3::Filter>& filters,

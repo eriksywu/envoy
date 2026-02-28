@@ -40,6 +40,7 @@
 #include "source/common/runtime/runtime_impl.h"
 #include "source/common/secret/secret_manager_impl.h"
 #include "source/common/singleton/manager_impl.h"
+#include "source/common/stats/resource_timestamp_registry.h"
 
 #ifdef ENVOY_ADMIN_FUNCTIONALITY
 #include "source/server/admin/admin.h"
@@ -218,6 +219,9 @@ public:
   bool healthCheckFailed() const override { return server_.healthCheckFailed(); }
   Ssl::ContextManager& sslContextManager() override { return server_.sslContextManager(); }
   Secret::SecretManager& secretManager() override { return server_.secretManager(); }
+  Stats::ResourceTimestampRegistry& resourceTimestampRegistry() override {
+    return server_.resourceTimestampRegistry();
+  }
 
   // Configuration::TransportSocketFactoryContext
   ServerFactoryContext& serverFactoryContext() override { return *this; }
@@ -299,6 +303,9 @@ public:
   const Options& options() override { return options_; }
   time_t startTimeCurrentEpoch() override { return start_time_; }
   time_t startTimeFirstEpoch() override { return original_start_time_; }
+  Stats::ResourceTimestampRegistry& resourceTimestampRegistry() override {
+    return *resource_timestamp_registry_;
+  }
   Stats::Store& stats() override { return stats_store_; }
   Grpc::Context& grpcContext() override { return grpc_context_; }
   Http::Context& httpContext() override { return http_context_; }
@@ -388,6 +395,7 @@ private:
   HotRestart& restarter_;
   const time_t start_time_;
   time_t original_start_time_;
+  std::unique_ptr<Stats::ResourceTimestampRegistry> resource_timestamp_registry_;
   Stats::StoreRoot& stats_store_;
   std::unique_ptr<ServerStats> server_stats_;
   std::unique_ptr<CompilationSettings::ServerCompilationSettingsStats>

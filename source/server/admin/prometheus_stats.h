@@ -10,6 +10,11 @@
 #include "source/server/admin/stats_params.h"
 
 namespace Envoy {
+
+namespace Stats {
+class ResourceTimestampRegistry;
+}
+
 namespace Server {
 /**
  * Formatter for metric/labels exported to Prometheus.
@@ -82,7 +87,8 @@ public:
                                     const Http::RequestHeaderMap& request_headers,
                                     Http::ResponseHeaderMap& response_headers,
                                     Buffer::Instance& response, const StatsParams& params,
-                                    const Stats::CustomStatNamespaces& custom_namespaces);
+                                    const Stats::CustomStatNamespaces& custom_namespaces,
+                                    const Stats::ResourceTimestampRegistry* timestamp_registry = nullptr);
 
   static uint64_t
   statsAsPrometheusText(const std::vector<Stats::CounterSharedPtr>& counters,
@@ -101,7 +107,8 @@ public:
                             const Upstream::ClusterManager& cluster_manager,
                             Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
                             const StatsParams& params,
-                            const Stats::CustomStatNamespaces& custom_namespaces);
+                            const Stats::CustomStatNamespaces& custom_namespaces,
+                            const Stats::ResourceTimestampRegistry* timestamp_registry = nullptr);
 
   static uint64_t
   generateWithOutputFormat(const std::vector<Stats::CounterSharedPtr>& counters,

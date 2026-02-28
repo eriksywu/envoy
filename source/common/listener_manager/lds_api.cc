@@ -8,12 +8,15 @@
 #include "envoy/service/discovery/v3/discovery.pb.h"
 #include "envoy/stats/scope.h"
 
+#include <chrono>
+
 #include "source/common/common/assert.h"
 #include "source/common/common/cleanup.h"
 #include "source/common/config/api_version.h"
 #include "source/common/config/utility.h"
 #include "source/common/grpc/common.h"
 #include "source/common/protobuf/utility.h"
+#include "source/common/stats/resource_timestamp_registry.h"
 
 #include "absl/container/node_hash_set.h"
 #include "absl/strings/str_join.h"
@@ -25,11 +28,13 @@ LdsApiImpl::LdsApiImpl(const envoy::config::core::v3::ConfigSource& lds_config,
                        const xds::core::v3::ResourceLocator* lds_resources_locator,
                        Config::XdsManager& xds_manager, Upstream::ClusterManager& cm,
                        Init::Manager& init_manager, Stats::Scope& scope, ListenerManager& lm,
-                       ProtobufMessage::ValidationVisitor& validation_visitor)
+                       ProtobufMessage::ValidationVisitor& validation_visitor,
+                       Stats::ResourceTimestampRegistry* timestamp_registry)
     : Envoy::Config::SubscriptionBase<envoy::config::listener::v3::Listener>(validation_visitor,
                                                                              "name"),
       listener_manager_(lm), scope_(scope.createScope("listener_manager.lds.")),
-      xds_manager_(xds_manager), init_target_("LDS", [this]() { subscription_->start({}); }) {
+      xds_manager_(xds_manager), timestamp_registry_(timestamp_registry),
+      init_target_("LDS", [this]() { subscription_->start({}); }) {
   const auto resource_name = getResourceName();
   if (lds_resources_locator == nullptr) {
     subscription_ = THROW_OR_RETURN_VALUE(cm.subscriptionFactory().subscriptionFromConfigSource(
@@ -63,6 +68,9 @@ LdsApiImpl::onConfigUpdate(const std::vector<Config::DecodedResourceRef>& added_
   for (const auto& removed_listener : removed_resources) {
     if (listener_manager_.removeListener(removed_listener)) {
       ENVOY_LOG(info, "lds: remove listener '{}'", removed_listener);
+      if (timestamp_registry_ != nullptr) {
+        timestamp_registry_->remove(removed_listener);
+      }
       any_applied = true;
     }
   }
@@ -104,6 +112,13 @@ LdsApiImpl::onConfigUpdate(const std::vector<Config::DecodedResourceRef>& added_
       }
       if (update_or_error.value()) {
         ENVOY_LOG(info, "lds: add/update listener '{}'", listener_name);
+        if (timestamp_registry_ != nullptr) {
+          timestamp_registry_->recordFirstSeen(
+              listener_name,
+              std::chrono::duration_cast<std::chrono::seconds>(
+                  std::chrono::system_clock::now().time_since_epoch())
+                  .count());
+        }
         any_applied = true;
       } else {
         ENVOY_LOG(debug, "lds: add/update listener '{}' skipped", listener_name);

@@ -36,6 +36,7 @@
 namespace Envoy {
 
 namespace Stats {
+class ResourceTimestampRegistry;
 class SinkPredicates;
 }
 
@@ -205,6 +206,11 @@ public:
    * @return the time that the server started the first hot restart epoch.
    */
   virtual time_t startTimeFirstEpoch() PURE;
+
+  /**
+   * @return the per-resource timestamp registry for created_timestamp tracking.
+   */
+  virtual Stats::ResourceTimestampRegistry& resourceTimestampRegistry() PURE;
 
   /**
    * @return the server-wide stats store.

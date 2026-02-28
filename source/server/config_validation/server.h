@@ -25,6 +25,7 @@
 #include "source/common/runtime/runtime_impl.h"
 #include "source/common/secret/secret_manager_impl.h"
 #include "source/common/singleton/manager_impl.h"
+#include "source/common/stats/resource_timestamp_registry.h"
 #include "source/common/thread_local/thread_local_impl.h"
 #include "source/server/config_validation/admin.h"
 #include "source/server/config_validation/api.h"
@@ -110,6 +111,9 @@ public:
   const Options& options() override { return options_; }
   time_t startTimeCurrentEpoch() override { PANIC("not implemented"); }
   time_t startTimeFirstEpoch() override { PANIC("not implemented"); }
+  Stats::ResourceTimestampRegistry& resourceTimestampRegistry() override {
+    return *resource_timestamp_registry_;
+  }
   Stats::Store& stats() override { return stats_store_; }
   Grpc::Context& grpcContext() override { return grpc_context_; }
   Http::Context& httpContext() override { return http_context_; }
@@ -175,6 +179,8 @@ private:
   const Options& options_;
   ProtobufMessage::ProdValidationContextImpl validation_context_;
   Stats::IsolatedStoreImpl& stats_store_;
+  std::unique_ptr<Stats::ResourceTimestampRegistry> resource_timestamp_registry_{
+      std::make_unique<Stats::ResourceTimestampRegistry>(0)};
   ThreadLocal::InstanceImpl thread_local_;
   envoy::config::bootstrap::v3::Bootstrap bootstrap_;
   Api::ApiPtr api_;

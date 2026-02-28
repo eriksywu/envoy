@@ -1,7 +1,10 @@
 #include "source/common/rds/rds_route_config_subscription.h"
 
+#include <chrono>
+
 #include "source/common/common/logger.h"
 #include "source/common/rds/util.h"
+#include "source/common/stats/resource_timestamp_registry.h"
 
 namespace Envoy {
 namespace Rds {
@@ -108,6 +111,11 @@ absl::Status RdsRouteConfigSubscription::onConfigUpdate(
   if (config_update_info_->onRdsUpdate(route_config, version_info)) {
     stats_.config_reload_.inc();
     stats_.config_reload_time_ms_.set(DateUtil::nowToMilliseconds(factory_context_.timeSource()));
+    factory_context_.resourceTimestampRegistry().recordFirstSeen(
+        route_config_name_,
+        std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count());
 
     RETURN_IF_NOT_OK(beforeProviderUpdate(noop_init_manager, resume_rds));
 

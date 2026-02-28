@@ -89,7 +89,10 @@ InstanceBase::InstanceBase(Init::Manager& init_manager, const Options& options,
                           !options.rejectUnknownDynamicFields(),
                           options.ignoreUnknownDynamicFields(), options.skipDeprecatedLogs()),
       time_source_(time_system), restarter_(restarter), start_time_(time(nullptr)),
-      original_start_time_(start_time_), stats_store_(store), thread_local_(tls),
+      original_start_time_(start_time_),
+      resource_timestamp_registry_(
+          std::make_unique<Stats::ResourceTimestampRegistry>(start_time_)),
+      stats_store_(store), thread_local_(tls),
       random_generator_(std::move(random_generator)),
       api_(new Api::Impl(
           thread_factory, store, time_system, file_system, *random_generator_, bootstrap_,
@@ -823,6 +826,17 @@ absl::Status InstanceBase::initializeOrThrow(Network::Address::InstanceConstShar
   // is constructed as part of the InstanceBase and then populated once
   // cluster_manager_factory_ is available.
   RETURN_IF_NOT_OK(config_.initialize(bootstrap_, *this, *cluster_manager_factory_));
+
+  // Record first-seen timestamps for static clusters at process start time.
+  for (const auto& [name, _] : clusterManager().clusters().active_clusters_) {
+    resource_timestamp_registry_->recordFirstSeen(name, start_time_);
+  }
+
+  // Record first-seen timestamps for static listeners at process start time.
+  for (const auto& listener : listenerManager().listeners(ListenerManager::WARMING |
+                                                          ListenerManager::ACTIVE)) {
+    resource_timestamp_registry_->recordFirstSeen(listener.get().name(), start_time_);
+  }
 
   // Instruct the listener manager to create the LDS provider if needed. This must be done later
   // because various items do not yet exist when the listener manager is created.

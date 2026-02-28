@@ -106,13 +106,6 @@ public:
   virtual bool hidden() const PURE;
 
   /**
-   * Returns the wall-clock time when this metric was first created.
-   * This is intended for populating the created_timestamp field in
-   * Prometheus protobuf exposition format.
-   */
-  virtual SystemTime creationTime() const PURE;
-
-  /**
    * Flags:
    * Used: used by all stats types to figure out whether they have been used.
    * Logic...: used by gauges to cache how they should be combined with a parent's value.

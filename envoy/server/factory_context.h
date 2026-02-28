@@ -44,6 +44,10 @@ namespace Regex {
 class Engine;
 }
 
+namespace Stats {
+class ResourceTimestampRegistry;
+}
+
 namespace Server {
 namespace Configuration {
 
@@ -234,6 +238,11 @@ public:
    * Return the instance of secret manager.
    */
   virtual Secret::SecretManager& secretManager() PURE;
+
+  /**
+   * @return the per-resource timestamp registry for created_timestamp tracking.
+   */
+  virtual Stats::ResourceTimestampRegistry& resourceTimestampRegistry() PURE;
 };
 
 // ServerFactoryContextInstance is a thread local singleton that provides access to the

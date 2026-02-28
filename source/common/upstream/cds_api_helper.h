@@ -11,6 +11,11 @@
 #include "source/common/protobuf/protobuf.h"
 
 namespace Envoy {
+
+namespace Stats {
+class ResourceTimestampRegistry;
+}
+
 namespace Upstream {
 
 /**
@@ -19,8 +24,10 @@ namespace Upstream {
  */
 class CdsApiHelper : Logger::Loggable<Logger::Id::upstream> {
 public:
-  CdsApiHelper(ClusterManager& cm, Config::XdsManager& xds_manager, std::string name)
-      : cm_(cm), xds_manager_(xds_manager), name_(std::move(name)) {}
+  CdsApiHelper(ClusterManager& cm, Config::XdsManager& xds_manager, std::string name,
+               Stats::ResourceTimestampRegistry* timestamp_registry = nullptr)
+      : cm_(cm), xds_manager_(xds_manager), name_(std::move(name)),
+        timestamp_registry_(timestamp_registry) {}
   /**
    * onConfigUpdate handles the addition and removal of clusters by notifying the ClusterManager
    * about the cluster changes. It closely follows the onConfigUpdate API from
@@ -43,6 +50,7 @@ private:
   Config::XdsManager& xds_manager_;
   const std::string name_;
   std::string system_version_info_;
+  Stats::ResourceTimestampRegistry* timestamp_registry_;
 };
 
 } // namespace Upstream

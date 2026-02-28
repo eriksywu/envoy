@@ -9,6 +9,7 @@
 #include "source/common/common/regex.h"
 #include "source/common/protobuf/protobuf.h"
 #include "source/common/stats/histogram_impl.h"
+#include "source/common/stats/resource_timestamp_registry.h"
 #include "source/common/upstream/host_utility.h"
 
 #include "absl/strings/str_cat.h"
@@ -67,6 +68,19 @@ struct PrimitiveMetricSnapshotLessThan {
     return a->name() < b->name();
   }
 };
+
+// Resolve a metric's parent xDS resource name from its tags.
+// Returns the tag value for the first well-known resource tag found,
+// or empty string if none match.
+std::string resolveResourceName(const std::vector<Stats::Tag>& tags) {
+  for (const auto& tag : tags) {
+    if (tag.name_ == "envoy.cluster_name" || tag.name_ == "envoy.listener_address" ||
+        tag.name_ == "envoy.http_conn_manager_prefix" || tag.name_ == "envoy.virtual_host") {
+      return tag.value_;
+    }
+  }
+  return "";
+}
 
 class TextFormat : public PrometheusStatsFormatter::OutputFormat {
 public:
@@ -231,9 +245,11 @@ class ProtobufFormat : public PrometheusStatsFormatter::OutputFormat {
 public:
   static constexpr uint32_t kDefaultMaxNativeHistogramBuckets = 20;
 
-  ProtobufFormat(absl::optional<uint32_t> native_histogram_max_buckets)
+  ProtobufFormat(absl::optional<uint32_t> native_histogram_max_buckets,
+                 const Stats::ResourceTimestampRegistry* timestamp_registry = nullptr)
       : native_histogram_max_buckets_(
-            native_histogram_max_buckets.value_or(kDefaultMaxNativeHistogramBuckets)) {}
+            native_histogram_max_buckets.value_or(kDefaultMaxNativeHistogramBuckets)),
+        timestamp_registry_(timestamp_registry) {}
 
   void generateOutput(Buffer::Instance& output, const std::vector<const Stats::Counter*>& counters,
                       const std::string& prefixed_tag_extracted_name) const override {
@@ -317,23 +333,6 @@ public:
   }
 
 private:
-  // Helper to set a created_timestamp proto field from a SystemTime.
-  // Skips epoch (zero) values, which null stat implementations return.
-  static void maybeSetCreatedTimestamp(google::protobuf::Timestamp* timestamp,
-                                       SystemTime creation_time) {
-    if (creation_time == SystemTime()) {
-      return;
-    }
-    const auto duration = creation_time.time_since_epoch();
-    const auto seconds =
-        std::chrono::duration_cast<std::chrono::seconds>(duration).count();
-    const auto nanos =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count() %
-        1000000000;
-    timestamp->set_seconds(seconds);
-    timestamp->set_nanos(static_cast<int32_t>(nanos));
-  }
-
   // Helper method to add labels to a metric from tags.
   void addLabelsToMetric(io::prometheus::client::Metric* metric,
                          const std::vector<Stats::Tag>& tags) const {
@@ -364,9 +363,11 @@ private:
       if (type == io::prometheus::client::MetricType::COUNTER) {
         auto* counter = prom_metric->mutable_counter();
         counter->set_value(metric->value());
-        if constexpr (std::is_base_of_v<Stats::Metric, StatType>) {
-          maybeSetCreatedTimestamp(counter->mutable_created_timestamp(),
-                                  metric->creationTime());
+        // Set created_timestamp for counters only (gauges don't have it in Prometheus).
+        // Only set for non-primitive stats (Stats::Counter), not PrimitiveCounterSnapshot
+        // which represents per-endpoint stats (out of scope).
+        if constexpr (std::is_same_v<Stats::Counter, StatType>) {
+          maybeSetCreatedTimestamp(counter, metric->tags());
         }
       } else {
         auto* gauge = prom_metric->mutable_gauge();
@@ -393,6 +394,7 @@ private:
       auto* prom_histogram = metric->mutable_histogram();
       prom_histogram->set_sample_count(stats.sampleCount());
       prom_histogram->set_sample_sum(stats.sampleSum());
+      maybeSetCreatedTimestamp(prom_histogram, histogram->tags());
 
       prom_histogram->mutable_bucket()->Reserve(supported_buckets.size());
       for (size_t i = 0; i < supported_buckets.size(); ++i) {
@@ -400,9 +402,6 @@ private:
         bucket->set_upper_bound(supported_buckets[i]);
         bucket->set_cumulative_count(computed_buckets[i]);
       }
-
-      maybeSetCreatedTimestamp(prom_histogram->mutable_created_timestamp(),
-                              histogram->creationTime());
     }
   }
 
@@ -422,6 +421,7 @@ private:
       auto* summary = metric->mutable_summary();
       summary->set_sample_count(stats.sampleCount());
       summary->set_sample_sum(stats.sampleSum());
+      maybeSetCreatedTimestamp(summary, histogram->tags());
 
       summary->mutable_quantile()->Reserve(supported_quantiles.size());
       for (size_t i = 0; i < supported_quantiles.size(); ++i) {
@@ -429,9 +429,6 @@ private:
         quantile->set_quantile(supported_quantiles[i]);
         quantile->set_value(computed_quantiles[i]);
       }
-
-      maybeSetCreatedTimestamp(summary->mutable_created_timestamp(),
-                              histogram->creationTime());
     }
   }
 
@@ -478,8 +475,6 @@ private:
       addLabelsToMetric(metric, histogram->tags());
 
       auto* proto_histogram = metric->mutable_histogram();
-      maybeSetCreatedTimestamp(proto_histogram->mutable_created_timestamp(),
-                              histogram->creationTime());
 
       // Handle empty histogram case early to avoid unnecessary work.
       // Add a no-op span (offset 0, length 0) to distinguish from classic histograms.
@@ -494,6 +489,7 @@ private:
 
       proto_histogram->set_sample_count(stats.sampleCount());
       proto_histogram->set_sample_sum(stats.sampleSum());
+      maybeSetCreatedTimestamp(proto_histogram, histogram->tags());
 
       const double zero_threshold = nativeHistogramZeroThreshold(histogram->unit());
       proto_histogram->set_zero_threshold(zero_threshold);
@@ -660,7 +656,32 @@ private:
     reservation.commit(varint_size + length);
   }
 
+  // Set created_timestamp on a proto message (Counter, Histogram, or Summary)
+  // using the resource timestamp registry. No-op if registry is null.
+  template <typename ProtoMessage>
+  void maybeSetCreatedTimestamp(ProtoMessage* proto_msg,
+                                const std::vector<Stats::Tag>& tags) const {
+    if (timestamp_registry_ == nullptr) {
+      return;
+    }
+    const std::string resource_name = resolveResourceName(tags);
+    int64_t first_seen;
+    if (!resource_name.empty()) {
+      first_seen = timestamp_registry_->getFirstSeen(resource_name);
+    } else {
+      first_seen = 0;
+    }
+    // Fall back to process start time if the resource is not tracked.
+    if (first_seen == 0) {
+      first_seen = timestamp_registry_->processStartTime();
+    }
+    auto* ct = proto_msg->mutable_created_timestamp();
+    ct->set_seconds(first_seen);
+    ct->set_nanos(0);
+  }
+
   uint32_t native_histogram_max_buckets_{kDefaultMaxNativeHistogramBuckets};
+  const Stats::ResourceTimestampRegistry* timestamp_registry_{nullptr};
 };
 
 /**
@@ -995,13 +1016,14 @@ uint64_t PrometheusStatsFormatter::statsAsPrometheusProtobuf(
     const std::vector<Stats::TextReadoutSharedPtr>& text_readouts,
     const Upstream::ClusterManager& cluster_manager, Http::ResponseHeaderMap& response_headers,
     Buffer::Instance& response, const StatsParams& params,
-    const Stats::CustomStatNamespaces& custom_namespaces) {
+    const Stats::CustomStatNamespaces& custom_namespaces,
+    const Stats::ResourceTimestampRegistry* timestamp_registry) {
 
   response_headers.setReferenceContentType(
       "application/vnd.google.protobuf; "
       "proto=io.prometheus.client.MetricFamily; encoding=delimited");
 
-  ProtobufFormat output_format(params.native_histogram_max_buckets_);
+  ProtobufFormat output_format(params.native_histogram_max_buckets_, timestamp_registry);
   return generateWithOutputFormat(counters, gauges, histograms, text_readouts, cluster_manager,
                                   response, params, custom_namespaces, output_format);
 }
@@ -1013,12 +1035,13 @@ uint64_t PrometheusStatsFormatter::statsAsPrometheus(
     const std::vector<Stats::TextReadoutSharedPtr>& text_readouts,
     const Upstream::ClusterManager& cluster_manager, const Http::RequestHeaderMap& request_headers,
     Http::ResponseHeaderMap& response_headers, Buffer::Instance& response,
-    const StatsParams& params, const Stats::CustomStatNamespaces& custom_namespaces) {
+    const StatsParams& params, const Stats::CustomStatNamespaces& custom_namespaces,
+    const Stats::ResourceTimestampRegistry* timestamp_registry) {
 
   return useProtobufFormat(params, request_headers)
              ? statsAsPrometheusProtobuf(counters, gauges, histograms, text_readouts,
                                          cluster_manager, response_headers, response, params,
-                                         custom_namespaces)
+                                         custom_namespaces, timestamp_registry)
              : statsAsPrometheusText(counters, gauges, histograms, text_readouts, cluster_manager,
                                      response, params, custom_namespaces);
 }
